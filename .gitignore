@@ -1,0 +1,5 @@
+# ignore pyton objects
+**.pyc
+# ignore pyinstaller files
+build/**
+dist/**
