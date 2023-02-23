@@ -16,6 +16,8 @@ from getpass import getpass, getuser
 import configargparse
 from re import compile
 from colorama import Fore, Style, ansi
+from rich.console import Console
+from rich.table import Table, box
 
 def regex_parse(arg_value):
     """
@@ -97,28 +99,36 @@ def state_string(state):
 def text_output(notifications, limit: int):
     """generates text output from fetched notifications"""
     counter = 0
-    separator = " | "
+    table = Table(box=box.SIMPLE_HEAVY)
+    table.add_column("Number", style="dim", width=5)
+    table.add_column("Timestamp", width=20)
+    table.add_column("State")
+    table.add_column("Hostname")
+    table.add_column("Service")
     for r in notifications:
         timestamp = show_time(int(r.get("notification_timestamp")))
         hostname = r.get("host_name")
         service = r.get("service_display_name")
         url = r.get("url")
         state = state_string(r.get("notification_state"))
+        print(r.get("notification_state"))
+
 
         if r.get("notification_contact_name") != None:
             if args.filter.match(r.get("notification_contact_name")):
                 if counter < limit:
-                    output = separator.join([
+                    table.add_row(
                             f"{counter+1:02d}",
                             timestamp,
                             state,
                             hostname,
                             service
-                        ])
-                    print(output)
+                        )
+                    console.print(table)
                     if not args.disable_urls:
                         print(f'   `-{Fore.GREEN}{Style.BRIGHT}{url}{Style.RESET_ALL}')
                     counter += 1
+
                 else:
                     break
 
@@ -216,6 +226,9 @@ if __name__ == "__main__":
     )
 
     args = p.parse_args()
+
+    console = Console()
+
 
     # ask for password if it isn't set from the commandline
     if args.password is None:
