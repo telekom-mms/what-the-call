@@ -87,6 +87,7 @@ def show_time(ts):
 def state_string(state):
     """maps the state number (1-3) to colored text output"""
     states = {
+        '0': f'{Fore.GREEN}OK{Fore.RESET}',
         '1': f'{Fore.YELLOW}WARN{Fore.RESET}',
         '2': f'{Fore.RED}CRIT{Fore.RESET}',
         '3': f'{Fore.CYAN}UNKN{Fore.RESET}'
