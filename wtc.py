@@ -89,10 +89,10 @@ def show_time(ts):
 def state_string(state):
     """maps the state number (1-3) to colored text output"""
     states = {
-        '0': f'{Fore.GREEN}OK{Fore.RESET}',
-        '1': f'{Fore.YELLOW}WARN{Fore.RESET}',
-        '2': f'{Fore.RED}CRIT{Fore.RESET}',
-        '3': f'{Fore.CYAN}UNKN{Fore.RESET}'
+        '0': '[green]OK',
+        '1': '[yellow]WARNING',
+        '2': '[red]CRITICAL',
+        '3': '[cyan]UNKNOWN'
     }
     return states.get(state, state)
 
@@ -105,13 +105,13 @@ def text_output(notifications, limit: int):
     table.add_column("State")
     table.add_column("Hostname")
     table.add_column("Service")
+
     for r in notifications:
         timestamp = show_time(int(r.get("notification_timestamp")))
         hostname = r.get("host_name")
         service = r.get("service_display_name")
-        url = r.get("url")
         state = state_string(r.get("notification_state"))
-        print(r.get("notification_state"))
+        # print(r.get("notification_state"))
 
 
         if r.get("notification_contact_name") != None:
@@ -124,13 +124,12 @@ def text_output(notifications, limit: int):
                             hostname,
                             service
                         )
-                    console.print(table)
-                    if not args.disable_urls:
-                        print(f'   `-{Fore.GREEN}{Style.BRIGHT}{url}{Style.RESET_ALL}')
                     counter += 1
 
                 else:
                     break
+
+    console.print(table)
 
 def show_data():
     """fetches and outputs icinga notifications"""
