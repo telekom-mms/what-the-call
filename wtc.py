@@ -14,7 +14,8 @@ import select
 from datetime import datetime
 from getpass import getpass, getuser
 import configargparse
-from re import compile
+import subprocess
+from re import compile, match
 from colorama import Fore, Style, ansi
 from rich.console import Console
 from rich.table import Table, box
@@ -128,33 +129,23 @@ def text_output(notifications, limit: int):
 
                 else:
                     break
-
+    
     console.print(table)
 
-def show_data():
-    """fetches and outputs icinga notifications"""
-    notifs = data_of_instances(args.instance)
+def check_input(notifications):
+    print('press enter to refresh or enter a entry number to open the check in the web browser (using xdg-open):')
+    user_input = input('([0-9]|q)> ')
 
-    text_output(
-        notifications=notifs,
-        limit=args.limit
-    )
-
-def wait_for_key(
-        prompt: str,
-        timeout: int,
-    ):
-    """waits for a timeout or a keypress"""
-    print(prompt, end='', flush=True)
-    timeStart = time.time()
-
-    while True:
-        if(timeout > -1 and (time.time() - timeStart) >= timeout):
-            break
-        if (select.select([stdin], [], [], 0) == ([stdin], [], [])):
-            stdin.read(1)
-            break
-        time.sleep(0.1)
+    if match('[0-9]+', user_input):
+        url = notifications[int(user_input)].get('url')
+        if not args.show_urls:
+            subprocess.run(['xdg-open', url])
+        else:
+            print(url)
+            print('copy or open url and press enter to refresh screen')
+            input()
+    if user_input == 'q':
+        exit(0)
 
 if __name__ == "__main__":
 
@@ -206,8 +197,9 @@ if __name__ == "__main__":
         default=None,
     )
     p.add(
-        "--disable-urls",
+        "--show-urls",
         action="store_true",
+        help="show URLs instead of using xdg-open to open in the default browser (useful for remote shells etc)",
         default=False,
     )
     p.add(
@@ -222,6 +214,12 @@ if __name__ == "__main__":
         help="interval for updates in watch mode in seconds",
         type=int,
         default=120,
+    )
+    p.add(
+        "--onetime",
+        "-o",
+        help="only output calls once and exit afterwards",
+        default=False
     )
 
     args = p.parse_args()
@@ -241,16 +239,21 @@ if __name__ == "__main__":
         "Accept": "application/json"
     }
 
-    if args.watch:
-        while True:
-            try:
-                print(ansi.clear_screen())
-                show_data()
-                wait_for_key(
-                    prompt=f"Waiting for {args.watch_interval}s, press enter to refresh now",
-                    timeout=args.watch_interval,
-                    )
-            except KeyboardInterrupt:
+    while True:
+        try:
+            notifs = data_of_instances(args.instance)
+            print(ansi.clear_screen())
+            text_output(
+                notifications=notifs,
+                limit=args.limit
+            )
+            if args.watch:
+                time.sleep(args.watch_interval)
+            elif args.onetime:
                 exit(0)
+            else:
+                check_input(notifs)
+        except KeyboardInterrupt:
+            exit(0)
     else:
         show_data()
