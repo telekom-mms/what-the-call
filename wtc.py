@@ -255,5 +255,3 @@ if __name__ == "__main__":
                 check_input(notifs)
         except KeyboardInterrupt:
             exit(0)
-    else:
-        show_data()
