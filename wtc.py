@@ -112,7 +112,6 @@ def text_output(notifications, limit: int):
         hostname = r.get("host_name")
         service = r.get("service_display_name")
         state = state_string(r.get("notification_state"))
-        # print(r.get("notification_state"))
 
 
         if r.get("notification_contact_name") != None:
