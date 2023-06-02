@@ -113,30 +113,40 @@ def text_output(notifications, limit: int):
         service = r.get("service_display_name")
         state = state_string(r.get("notification_state"))
 
+        if filter_notification(r):
+            if counter < limit:
+                table.add_row(
+                        f"{counter+1:02d}",
+                        timestamp,
+                        state,
+                        hostname,
+                        service
+                    )
+                counter += 1
 
-        if r.get("notification_contact_name") != None:
-            if args.filter.match(r.get("notification_contact_name")):
-                if counter < limit:
-                    table.add_row(
-                            f"{counter+1:02d}",
-                            timestamp,
-                            state,
-                            hostname,
-                            service
-                        )
-                    counter += 1
+            else:
+                break
 
-                else:
-                    break
-    
     console.print(table)
+
+def filter_notification(notification):
+    if notification.get("notification_contact_name") != None:
+        if args.filter.match(notification.get("notification_contact_name")):
+            return True
+    return False
 
 def check_input(notifications):
     print('press enter to refresh or enter a entry number to open the check in the web browser (using xdg-open):')
     user_input = input('([0-9]|q)> ')
 
     if match('[0-9]+', user_input):
-        url = notifications[int(user_input)].get('url')
+        counter = 0
+        for r in notifications:
+            if filter_notification(r):
+                counter += 1
+                if counter == int(user_input):
+                    url = r.get('url')
+                    break
         if not args.show_urls:
             subprocess.run(['xdg-open', url])
         else:
