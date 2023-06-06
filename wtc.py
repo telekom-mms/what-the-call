@@ -14,8 +14,11 @@ import select
 from datetime import datetime
 from getpass import getpass, getuser
 import configargparse
-from re import compile
+import subprocess
+from re import compile, match
 from colorama import Fore, Style, ansi
+from rich.console import Console
+from rich.table import Table, box
 
 def regex_parse(arg_value):
     """
@@ -87,65 +90,71 @@ def show_time(ts):
 def state_string(state):
     """maps the state number (1-3) to colored text output"""
     states = {
-        '0': f'{Fore.GREEN}OK{Fore.RESET}',
-        '1': f'{Fore.YELLOW}WARN{Fore.RESET}',
-        '2': f'{Fore.RED}CRIT{Fore.RESET}',
-        '3': f'{Fore.CYAN}UNKN{Fore.RESET}'
+        '0': '[green]OK',
+        '1': '[yellow]WARNING',
+        '2': '[red]CRITICAL',
+        '3': '[cyan]UNKNOWN'
     }
     return states.get(state, state)
 
 def text_output(notifications, limit: int):
     """generates text output from fetched notifications"""
     counter = 0
-    separator = " | "
+    table = Table(box=box.SIMPLE_HEAVY)
+    table.add_column("Number", style="dim", width=5)
+    table.add_column("Timestamp", width=20)
+    table.add_column("State")
+    table.add_column("Hostname")
+    table.add_column("Service")
+
     for r in notifications:
         timestamp = show_time(int(r.get("notification_timestamp")))
         hostname = r.get("host_name")
         service = r.get("service_display_name")
-        url = r.get("url")
         state = state_string(r.get("notification_state"))
 
-        if r.get("notification_contact_name") != None:
-            if args.filter.match(r.get("notification_contact_name")):
-                if counter < limit:
-                    output = separator.join([
-                            f"{counter+1:02d}",
-                            timestamp,
-                            state,
-                            hostname,
-                            service
-                        ])
-                    print(output)
-                    if not args.disable_urls:
-                        print(f'   `-{Fore.GREEN}{Style.BRIGHT}{url}{Style.RESET_ALL}')
-                    counter += 1
-                else:
+        if filter_notification(r):
+            if counter < limit:
+                table.add_row(
+                        f"{counter+1:02d}",
+                        timestamp,
+                        state,
+                        hostname,
+                        service
+                    )
+                counter += 1
+
+            else:
+                break
+
+    console.print(table)
+
+def filter_notification(notification):
+    if notification.get("notification_contact_name") != None:
+        if args.filter.match(notification.get("notification_contact_name")):
+            return True
+    return False
+
+def check_input(notifications):
+    print('press enter to refresh or enter a entry number to open the check in the web browser (using xdg-open):')
+    user_input = input('([0-9]|q)> ')
+
+    if match('[0-9]+', user_input):
+        counter = 0
+        for r in notifications:
+            if filter_notification(r):
+                counter += 1
+                if counter == int(user_input):
+                    url = r.get('url')
                     break
-
-def show_data():
-    """fetches and outputs icinga notifications"""
-    notifs = data_of_instances(args.instance)
-
-    text_output(
-        notifications=notifs,
-        limit=args.limit
-    )
-
-def wait_for_key(
-        prompt: str,
-        timeout: int,
-    ):
-    """waits for a timeout or a keypress"""
-    print(prompt, end='', flush=True)
-    timeStart = time.time()
-
-    while True:
-        if(timeout > -1 and (time.time() - timeStart) >= timeout):
-            break
-        if (select.select([stdin], [], [], 0) == ([stdin], [], [])):
-            stdin.read(1)
-            break
-        time.sleep(0.1)
+        if not args.show_urls:
+            subprocess.run(['xdg-open', url])
+        else:
+            print(url)
+            print('copy or open url and press enter to refresh screen')
+            input()
+    if user_input == 'q':
+        exit(0)
 
 if __name__ == "__main__":
 
@@ -197,8 +206,9 @@ if __name__ == "__main__":
         default=None,
     )
     p.add(
-        "--disable-urls",
+        "--show-urls",
         action="store_true",
+        help="show URLs instead of using xdg-open to open in the default browser (useful for remote shells etc)",
         default=False,
     )
     p.add(
@@ -214,8 +224,17 @@ if __name__ == "__main__":
         type=int,
         default=120,
     )
+    p.add(
+        "--onetime",
+        "-o",
+        help="only output calls once and exit afterwards",
+        default=False
+    )
 
     args = p.parse_args()
+
+    console = Console()
+
 
     # ask for password if it isn't set from the commandline
     if args.password is None:
@@ -229,16 +248,19 @@ if __name__ == "__main__":
         "Accept": "application/json"
     }
 
-    if args.watch:
-        while True:
-            try:
-                print(ansi.clear_screen())
-                show_data()
-                wait_for_key(
-                    prompt=f"Waiting for {args.watch_interval}s, press enter to refresh now",
-                    timeout=args.watch_interval,
-                    )
-            except KeyboardInterrupt:
+    while True:
+        try:
+            notifs = data_of_instances(args.instance)
+            print(ansi.clear_screen())
+            text_output(
+                notifications=notifs,
+                limit=args.limit
+            )
+            if args.watch:
+                time.sleep(args.watch_interval)
+            elif args.onetime:
                 exit(0)
-    else:
-        show_data()
+            else:
+                check_input(notifs)
+        except KeyboardInterrupt:
+            exit(0)
