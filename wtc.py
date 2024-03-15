@@ -43,6 +43,22 @@ def generate_url(
         url = f"{instance}/dashboard#!/monitoring/service/show?host={host}&service={service}"
     return url
 
+def get_recovered(
+        row,
+        recovered_list
+        ):
+    """
+    checks if a recovery for the service in the row is present in recovered_list
+    """
+    for r_row in recovered_list:
+        if (
+                r_row.get("host_display_name") == row.get("host_display_name") and
+                r_row.get("service_display_name") == row.get("service_display_name") and
+                int(r_row.get("service_last_state_change")) > int(row.get("notification_timestamp"))
+            ):
+            return True
+    return False
+
 def get_instance_notifications(instance: str):
     """
     load the notifications of the supplied icinga instance
@@ -58,14 +74,33 @@ def get_instance_notifications(instance: str):
     except json.decoder.JSONDecodeError:
         print(f"error decoding json from {instance}. Login error?")
         exit(1)
-    # add links to output
+
+    # get recently recovered services
+    recover_req = requests.request(
+        "GET",
+        f"{instance}/monitoring/list/services?service_state=0&limit=500&sort=service_last_state_change&dir=desc",
+        headers=headers,
+        auth=icinga_auth
+    )
+    try:
+        recovered_list = json.loads(recover_req.text)
+    except json.decoder.JSONDecodeError:
+        print(f"error decoding recover json from {instance}. Login error?")
+        exit(1)
+
+    # add additional information to notification list output
     for row in output:
         url = generate_url(
             instance=instance,
             host = row.get("host_name"),
             service = row.get("service_description")
             )
+        recovered = get_recovered(
+            recovered_list=recovered_list,
+            row=row
+            )
         row.update({"url": url })
+        row.update({"recovered": recovered })
     return output
 
 def sort_by_ts(elem):
@@ -97,6 +132,13 @@ def state_string(state):
     }
     return states.get(state, state)
 
+def recovered_string(recovered):
+    """formatting helper to print out a bool as coloured text"""
+    if recovered:
+        return '[green]True'
+    else:
+        return '[red]False'
+
 def text_output(notifications, limit: int):
     """generates text output from fetched notifications"""
     counter = 0
@@ -104,6 +146,7 @@ def text_output(notifications, limit: int):
     table.add_column("Number", style="dim", width=5)
     table.add_column("Timestamp", width=20)
     table.add_column("State")
+    table.add_column("Recovered")
     table.add_column("Hostname")
     table.add_column("Service")
 
@@ -112,6 +155,7 @@ def text_output(notifications, limit: int):
         hostname = r.get("host_name")
         service = r.get("service_display_name")
         state = state_string(r.get("notification_state"))
+        recovered = recovered_string(r.get("recovered"))
 
         if filter_notification(r):
             if counter < limit:
@@ -119,6 +163,7 @@ def text_output(notifications, limit: int):
                         f"{counter+1:02d}",
                         timestamp,
                         state,
+                        recovered,
                         hostname,
                         service
                     )
