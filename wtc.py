@@ -14,12 +14,11 @@ import re
 import sys
 
 import requests
-from requests.auth import HTTPBasicAuth
-import requests.auth
 import configargparse
 from colorama import ansi
 from rich.console import Console
 from rich.table import Table, box
+
 
 def regex_parse(arg_value):
     """
@@ -31,10 +30,8 @@ def regex_parse(arg_value):
         raise configargparse.ArgumentTypeError("invalid regex") from e
     return contact_filter
 
-def generate_url(
-        instance: str,
-        host: str,
-        service: typing.Optional[str]=None):
+
+def generate_url(instance: str, host: str, service: typing.Optional[str] = None):
     """
     generates the URL to the check in the webinterface
     """
@@ -44,21 +41,21 @@ def generate_url(
         url = f"{instance}/monitoring/service/show?host={host}&service={service}"
     return url
 
-def get_recovered(
-        row,
-        recovered_list
-        ):
+
+def get_recovered(row, recovered_list):
     """
     checks if a recovery for the service in the row is present in recovered_list
     """
     for r_row in recovered_list:
         if (
-                r_row.get("host_display_name") == row.get("host_display_name") and
-                r_row.get("service_display_name") == row.get("service_display_name") and
-                int(r_row.get("service_last_state_change")) > int(row.get("notification_timestamp"))
-            ):
+            r_row.get("host_display_name") == row.get("host_display_name")
+            and r_row.get("service_display_name") == row.get("service_display_name")
+            and int(r_row.get("service_last_state_change"))
+            > int(row.get("notification_timestamp"))
+        ):
             return True
     return False
+
 
 def get_instance_notifications(instance: str, headers: dict, auth, command_args):
     """
@@ -71,7 +68,7 @@ def get_instance_notifications(instance: str, headers: dict, auth, command_args)
             f"{instance}/monitoring/list/notifications?notification_timestamp>={command_args.lookback}",
             headers=headers,
             auth=auth,
-            timeout=command_args.timeout
+            timeout=command_args.timeout,
         )
 
         # get recently recovered services
@@ -80,12 +77,12 @@ def get_instance_notifications(instance: str, headers: dict, auth, command_args)
             f"{instance}/monitoring/list/services?service_state=0&limit=500&sort=service_last_state_change&dir=desc",
             headers=headers,
             auth=auth,
-            timeout=command_args.timeout
+            timeout=command_args.timeout,
         )
         get_notifications.raise_for_status()
         recover_req.raise_for_status()
     except requests.exceptions.RequestException as e:
-        print('error requesting data from icinga:', e)
+        print("error requesting data from icinga:", e)
         sys.exit(1)
 
     try:
@@ -99,50 +96,52 @@ def get_instance_notifications(instance: str, headers: dict, auth, command_args)
     for row in output:
         url = generate_url(
             instance=instance,
-            host = row.get("host_name"),
-            service = row.get("service_description")
-            )
-        recovered = get_recovered(
-            recovered_list=recovered_list,
-            row=row
-            )
-        row.update({"url": url })
-        row.update({"recovered": recovered })
+            host=row.get("host_name"),
+            service=row.get("service_description"),
+        )
+        recovered = get_recovered(recovered_list=recovered_list, row=row)
+        row.update({"url": url})
+        row.update({"recovered": recovered})
     return output
+
 
 def data_of_instances(auth, _args):
     """fetches data from multiple icinga instances"""
-    headers = {
-        "Accept": "application/json"
-    }
+    headers = {"Accept": "application/json"}
     instances = _args.instance
     icinga_notifications = []
     for instance in instances:
         icinga_output = get_instance_notifications(instance, headers, auth, _args)
         icinga_notifications.extend(icinga_output)
-    icinga_notifications.sort(key=lambda x: x.get('notification_timestamp'), reverse=True)
+    icinga_notifications.sort(
+        key=lambda x: x.get("notification_timestamp"), reverse=True
+    )
     return icinga_notifications
+
 
 def show_time(ts):
     """icinga returns timestamps as unix timestamp - this produces "readable" time for the output"""
-    return datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
+    return datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M:%S")
+
 
 def state_string(state):
     """maps the state number (1-3) to colored text output"""
     states = {
-        '0': '[green]OK',
-        '1': '[yellow]WARNING',
-        '2': '[red]CRITICAL',
-        '3': '[cyan]UNKNOWN'
+        "0": "[green]OK",
+        "1": "[yellow]WARNING",
+        "2": "[red]CRITICAL",
+        "3": "[cyan]UNKNOWN",
     }
     return states.get(state, state)
+
 
 def recovered_string(recovered):
     """formatting helper to print out a bool as coloured text"""
     if recovered:
-        return '[green]True'
+        return "[green]True"
     else:
-        return '[red]False'
+        return "[red]False"
+
 
 def text_output(notifications, limit: int, console):
     """generates text output from fetched notifications"""
@@ -163,17 +162,13 @@ def text_output(notifications, limit: int, console):
 
         if counter < limit:
             table.add_row(
-                f"{counter+1:02d}",
-                timestamp,
-                state,
-                recovered,
-                hostname,
-                service
+                f"{counter+1:02d}", timestamp, state, recovered, hostname, service
             )
         else:
             break
 
     console.print(table)
+
 
 def filter_notification(notification):
     """
@@ -184,33 +179,37 @@ def filter_notification(notification):
             return True
     return False
 
+
 def check_input(notifications):
     """
     checks if the user wants to open the icinga page of a specific check
     """
-    print('press enter to refresh or enter a entry number',
-          'to open the check in the web browser (using xdg-open):')
+    print(
+        "press enter to refresh or enter a entry number",
+        "to open the check in the web browser (using xdg-open):",
+    )
 
-    user_input = input('([0-9]|q)> ')
+    user_input = input("([0-9]|q)> ")
 
-    if re.match('[0-9]+', user_input):
+    if re.match("[0-9]+", user_input):
         try:
-            url = notifications[int(user_input)-1]['url']
+            url = notifications[int(user_input) - 1]["url"]
         except IndexError:
             pass
 
         if not args.show_urls:
-            subprocess.run(['xdg-open', url], check=False)
+            subprocess.run(["xdg-open", url], check=False)
         else:
             print(url)
-            print('copy or open url and press enter to refresh screen')
+            print("copy or open url and press enter to refresh screen")
             input()
-    if user_input == 'q':
+    if user_input == "q":
         sys.exit(0)
+
 
 if __name__ == "__main__":
     p = configargparse.ArgParser(
-        default_config_files=['~/.config/wtc.yml'],
+        default_config_files=["~/.config/wtc.yml"],
         config_file_parser_class=configargparse.YAMLConfigFileParser,
         formatter_class=configargparse.ArgumentDefaultsHelpFormatter,
     )
@@ -279,28 +278,27 @@ if __name__ == "__main__":
         "--onetime",
         "-o",
         help="only output calls once and exit afterwards",
-        default=False
+        default=False,
     )
     p.add(
         "--timeout",
         "-T",
         help="timeout for http requests to the icinga instances",
         type=int,
-        default=30
+        default=30,
     )
 
     args = p.parse_args()
 
     c = Console()
 
-
     # ask for password if it isn't set from the commandline
     if args.password is None:
-        password = getpass(f'enter password for {args.user}: ')
+        password = getpass(f"enter password for {args.user}: ")
     else:
         password = args.password
 
-    icinga_auth = HTTPBasicAuth(args.user, password)
+    icinga_auth = requests.auth.HTTPBasicAuth(args.user, password)
 
     while True:
         try:
