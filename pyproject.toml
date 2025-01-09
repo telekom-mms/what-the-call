@@ -1,0 +1,14 @@
+[project]
+name = "what-the-call"
+version = "0.1.0"
+description = "aggregates notifications from different icinga instances"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "attrdict3>=2.0.2",
+    "colorama>=0.4.6",
+    "configargparse>=1.5.3",
+    "pyyaml>=6.0",
+    "requests>=2.28.2",
+    "rich>=13.9.4",
+]
